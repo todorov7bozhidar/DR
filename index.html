@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Подреди по значимост</title>
+<style>
+  :root{--bg:#f4f1ea;--card:#fff;--ink:#222;--line:#c9c2b2;--ok:#2e8b57;--bad:#c0392b}
+  @media (prefers-color-scheme: dark){:root{--bg:#1c1b19;--card:#2a2926;--ink:#eee;--line:#55514a}}
+  *{box-sizing:border-box}
+  body{margin:0;padding:16px;background:var(--bg);color:var(--ink);font-family:Georgia,serif;text-align:center}
+  h1{font-size:1.4rem;margin:8px 0 16px}
+  .row{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;max-width:900px;margin:0 auto 18px}
+  #pool{min-height:200px;padding:10px;border:2px dashed var(--line);border-radius:12px}
+  .slotwrap{flex:1 1 0;min-width:100px;max-width:280px}
+  .label{font-weight:bold;margin-bottom:6px;font-size:.95rem}
+  .slot{min-height:200px;border:2px dashed var(--line);border-radius:12px;padding:6px;display:flex;align-items:center;justify-content:center}
+  .slot.ok{border:3px solid var(--ok)}
+  .slot.bad{border:3px solid var(--bad)}
+  .card{background:var(--card);border-radius:10px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.2);
+        width:120px;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+  .card img{width:100%;height:120px;object-fit:cover;border-radius:6px;display:block;pointer-events:none}
+  .date{margin-top:6px;font-size:1rem;font-weight:bold}
+  .ghost{position:fixed;z-index:999;pointer-events:none;opacity:.85;transform:scale(1.05)}
+  .slot .card{width:100%;max-width:240px}
+  .slot .card img{height:auto;aspect-ratio:1/1}
+  button{font:inherit;padding:10px 20px;margin:4px;border:0;border-radius:8px;background:#3b6ea5;color:#fff;cursor:pointer}
+  button.sec{background:#777}
+  #result{margin-top:14px;font-size:1.15rem;font-weight:bold;min-height:1.5em}
+</style>
+</head>
+<body>
+<h1>Подреди снимките по значимост</h1>
+
+<div class="row"><div id="pool"></div></div>
+
+<div class="row">
+  <div class="slotwrap"><div class="label">Много значим</div><div class="slot" data-key="dro"></div></div>
+  <div class="slotwrap"><div class="label">Средно значим</div><div class="slot" data-key="napoleon"></div></div>
+  <div class="slotwrap"><div class="label">Малко значим</div><div class="slot" data-key="dwight"></div></div>
+</div>
+
+<button id="check">Проверка</button>
+<button id="reset" class="sec">Отначало</button>
+<div id="result"></div>
+
+<script>
+// Файловете трябва да са в същата папка като този файл.
+// Имената на изображенията не се показват никъде на страницата.
+const PHOTOS = [
+  {id:'dro',      src:'dro.jpg',      date:'16.10'},
+  {id:'dwight',   src:'dwight.jpg',   date:'14.10'},
+  {id:'napoleon', src:'napoleon.jpg', date:'15.10'}
+];
+
+const pool = document.getElementById('pool');
+const slots = [...document.querySelectorAll('.slot')];
+const result = document.getElementById('result');
+
+function makeCard(p){
+  const c = document.createElement('div');
+  c.className = 'card';
+  c.dataset.id = p.id;
+  c.innerHTML = '<img alt="" draggable="false" src="'+p.src+'"><div class="date">'+p.date+'</div>';
+  c.addEventListener('pointerdown', startDrag);
+  return c;
+}
+
+function init(){
+  pool.innerHTML = '';
+  slots.forEach(s => { s.innerHTML=''; s.classList.remove('ok','bad'); });
+  result.textContent = '';
+  result.style.color = '';
+  [...PHOTOS].sort(()=>Math.random()-.5).forEach(p => pool.appendChild(makeCard(p)));
+}
+
+let drag = null;
+function startDrag(e){
+  e.preventDefault();
+  const card = e.currentTarget;
+  const r = card.getBoundingClientRect();
+  const ghost = card.cloneNode(true);
+  ghost.classList.add('ghost');
+  ghost.style.width = r.width+'px';
+  document.body.appendChild(ghost);
+  drag = {card, ghost, home: card.parentElement, dx:e.clientX-r.left, dy:e.clientY-r.top};
+  card.style.opacity = .3;
+  move(e);
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', end);
+  window.addEventListener('pointercancel', end);
+}
+function move(e){
+  if(!drag) return;
+  drag.ghost.style.left = (e.clientX-drag.dx)+'px';
+  drag.ghost.style.top  = (e.clientY-drag.dy)+'px';
+}
+function end(e){
+  if(!drag) return;
+  window.removeEventListener('pointermove', move);
+  window.removeEventListener('pointerup', end);
+  window.removeEventListener('pointercancel', end);
+  const {card, ghost, home} = drag;
+  ghost.remove();
+  card.style.opacity = '';
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const target = el && (el.closest('.slot') || el.closest('#pool'));
+  if(target && target !== home){
+    if(target.classList.contains('slot')){
+      const other = target.querySelector('.card');
+      if(other) home.appendChild(other);   // размяна
+      target.appendChild(card);
+    } else {
+      target.appendChild(card);
+    }
+    slots.forEach(s => s.classList.remove('ok','bad'));
+    result.textContent = '';
+  }
+  drag = null;
+}
+
+document.getElementById('check').onclick = () => {
+  const filled = slots.every(s => s.querySelector('.card'));
+  if(!filled){
+    result.style.color = '';
+    result.textContent = 'Постави и трите снимки на местата им.';
+    return;
+  }
+  let allOk = true;
+  slots.forEach(s => {
+    const ok = s.querySelector('.card').dataset.id === s.dataset.key;
+    s.classList.toggle('ok', ok);
+    s.classList.toggle('bad', !ok);
+    if(!ok) allOk = false;
+  });
+  result.style.color = allOk ? 'var(--ok)' : 'var(--bad)';
+  result.textContent = allOk ? '✔ Подредбата е вярна!' : '✘ Подредбата не е вярна. Опитай пак.';
+};
+document.getElementById('reset').onclick = init;
+
+init();
+</script>
+</body>
+</html>
